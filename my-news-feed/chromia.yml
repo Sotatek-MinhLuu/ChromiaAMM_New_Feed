@@ -1,0 +1,27 @@
+blockchains:
+  my_news_feed:
+    module: main
+    moduleArgs:
+      lib.ft4.core.auth:
+        evm_signatures_authorized_operations:
+          - register_user
+    test:
+      modules:
+        - test
+        - registration.test
+      moduleArgs:
+        main:
+          alice-pubkey: "020B3ED98D025AAF05F5EE5D0F1DE734BE7B7E9C110931AC21450C9E00C769FA2F"
+          bob-pubkey: "03C403FD532F8C5AC6B71FF83B3F5E5D2B68CA65B5AE83EACC6541FAFFF49FFDC6"
+compile:
+  rellVersion: 0.13.14
+database:
+  schema: schema_my_news_feed
+
+libs:
+  ft4:
+    registry: https://gitlab.com/chromaway/ft4-lib.git
+    path: rell/src/lib/ft4
+    tagOrBranch: v1.0.0r
+    rid: x"FA487D75E63B6B58381F8D71E0700E69BEDEAD3A57D1E6C1A9ABB149FAC9E65F"
+    insecure: false

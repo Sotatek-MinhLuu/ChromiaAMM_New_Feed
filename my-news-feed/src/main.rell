@@ -1,0 +1,4 @@
+module;
+
+import news_feed.*;
+import registration.*;

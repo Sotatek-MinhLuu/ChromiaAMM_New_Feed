@@ -1,0 +1,46 @@
+
+query get_user_name(user_id: byte_array): text {
+  return format_user(require_user(user_id));
+}
+
+query get_users(pointer: integer, n_users: integer) {
+  val users = user @* {} (name = format_user($), id = .id) offset pointer limit n_users;
+  return (
+    pointer = pointer + users.size(),
+    users = users
+  );
+}
+query get_followers_count(user_id: pubkey): integer {
+  return follower @ { .user == require_user(user_id) } ( @sum 1 );
+}
+
+query get_following_count(user_id: pubkey): integer {
+  return follower @ { .follower == require_user(user_id) } ( @sum 1 );
+}
+
+query is_following(my_id: byte_array, your_id: byte_array) =
+  exists(follower @? { .user.id == your_id, .follower.id == my_id });
+
+query get_posts(
+  user_id: byte_array,
+  pointer: integer,
+  n_posts: integer
+): (pointer: integer, posts: list<post_dto>) {
+  val posts = (user, follower, post) @* {
+    user.id == user_id,
+    follower.follower == user,
+    post.user == follower.user
+  } (
+    @sort_desc @omit post.rowid,
+    post_dto(
+        post.timestamp,
+        post.content,
+        user = post.user.to_struct()
+    )
+  ) offset pointer limit n_posts;
+
+  return (
+    pointer = pointer + posts.size(),
+    posts = posts
+  );
+}

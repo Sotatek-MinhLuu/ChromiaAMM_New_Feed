@@ -1,0 +1,125 @@
+@test module;
+
+import news_feed.*;
+import lib.ft4.test.utils.{ ft_auth_operation_for };
+
+val alice = rell.test.pubkeys.alice;
+val bob = rell.test.pubkeys.bob;
+val charlie = rell.test.pubkeys.charlie;
+val alice_kp = rell.test.keypairs.alice; // <--
+val bob_kp = rell.test.keypairs.bob;
+
+function test_create_entities() {
+    rell.test.tx()
+        .op(create_user("Alice", alice))
+        .op(create_user("Bob", bob))
+        .run();
+    assert_equals(user @ { } (@sum 1), 2);
+    rell.test.tx()
+        .op(ft_auth_operation_for(alice)) // Auth operation
+        .op(follow_user(bob))             // Argument removed
+        .op(ft_auth_operation_for(alice)) // Auth operation
+        .op(make_post("My post"))         // Argument removed
+        .sign(alice_kp)
+        .run();
+    assert_true(is_following(alice, bob));
+    assert_equals(follower @ { } (@sum 1), 1);
+    assert_equals(post @ { } (@sum 1), 1);
+}
+
+function test_user_name() {
+    rell.test.tx()
+        .op(create_user("Alice", alice))
+        .sign(alice_kp)  
+        .run();
+    assert_equals(get_user_name(alice), "Alice#02466");
+    val users_result = get_users(0, 20);
+    assert_equals(users_result.pointer, 1);
+    assert_equals(users_result.users.size(), 1);
+    assert_true(users_result.users @* {} (.name).contains("Alice#02466"));
+}
+
+function test_follower_calculation() {
+    rell.test.tx()
+        .op(create_user("Alice", alice))
+        .op(create_user("Bob", bob))
+        .op(create_user("Charlie", charlie))
+        .run();
+
+    rell.test.tx()
+        .op(ft_auth_operation_for(alice))
+        .op(follow_user(bob))
+        .op(ft_auth_operation_for(alice))
+        .op(follow_user(charlie))
+        .sign(alice_kp)
+        .run();
+
+    assert_true(is_following(alice, bob));
+    assert_true(is_following(alice, charlie));
+    assert_equals(get_following_count(alice), 2);
+    assert_equals(get_following_count(bob), 0);
+
+    assert_equals(get_followers_count(alice), 0);
+    assert_equals(get_followers_count(bob), 1);
+}
+
+function test_pagination_of_posts() {
+    rell.test.tx()
+        .op(create_user("Alice", alice))
+        .op(create_user("Bob", bob)).run();
+    rell.test.tx()
+        .op(ft_auth_operation_for(alice))
+        .op(follow_user(bob))
+        .sign(alice_kp)
+        .run();
+
+    for (i in range(5)) {
+        rell.test.tx()
+            .op(ft_auth_operation_for(bob))
+            .op(make_post("Content %d".format(i)))
+            .sign(bob_kp)
+            .run();
+    }
+
+    val initial_posts = get_posts(alice, 0, 4);
+    assert_equals(initial_posts.pointer, 4);
+    assert_equals(initial_posts.posts.size(), 4);
+    val last_posts = get_posts(alice, initial_posts.pointer, 4);
+    assert_equals(last_posts.pointer, 5);
+    assert_equals(last_posts.posts.size(), 1);
+}
+val charlie_kp = rell.test.keypairs.charlie;
+
+function test_input_verification() {
+    rell.test.tx()
+        .op(create_user("Alice", alice))
+        .op(create_user("Bob", bob)).run();
+
+    // Bob cannot impersonate alice
+    rell.test.tx()
+        .op(ft_auth_operation_for(alice)) // <-- malicious auth operation
+        .op(follow_user(bob))             // <-- argument removed
+        .sign(bob_kp)
+        .run_must_fail();
+    rell.test.tx()
+        .op(ft_auth_operation_for(alice))     // <-- malicious auth operation
+        .op(make_post("My malicous post"))    // <-- argument removed
+        .sign(bob_kp)
+        .run_must_fail();
+
+    // Alice cannot follow non-existing charlie
+    val f1 = rell.test.tx()
+        .op(ft_auth_operation_for(alice))  // <-- auth operation
+        .op(follow_user(charlie))          // <-- argument removed
+        .sign(alice_kp)
+        .run_must_fail();
+    assert_true(f1.message.contains("does not exist"));
+
+    // Charlie cannot create a post since he does not exist
+    val f2 = rell.test.tx()
+        //.op(ft_auth_operation_for(charlie))   // <-- Cannot create auth operation
+        .op(make_post("My secret post"))        // <-- argument removed
+        .sign(charlie_kp)
+        .run_must_fail();
+    assert_true(f2.message.contains("Expected at least two operations"));
+}

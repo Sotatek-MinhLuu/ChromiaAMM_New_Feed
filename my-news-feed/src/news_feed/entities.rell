@@ -1,0 +1,26 @@
+
+
+entity user {
+  mutable name;
+  key id: byte_array;
+  key account: account;
+}
+
+entity follower {
+  index user;
+  index follower: user;
+  key user, follower;
+}
+
+entity post {
+  timestamp = op_context.last_block_time;
+  index user;
+  content: text;
+}
+
+struct post_dto {
+  timestamp;
+  user: struct<user>;
+  content: text;
+}
+
